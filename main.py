@@ -9,23 +9,27 @@ import threading
 import time
 import uuid
 import atexit
+import argparse
 from typing import List, Dict, Any, Optional, Generator
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from llama_cpp import Llama, LlamaGrammar 
+from llama_cpp import Llama, LlamaGrammar
 # Assuming LlamaState might be needed for type hinting if available, but not strictly necessary for functionality.
 # from llama_cpp import LlamaState # If LlamaState is directly importable
 
 # --- Configuration ---
-LLM_MODEL_PATH = os.environ.get("LLM_MODEL_PATH")
-if not LLM_MODEL_PATH:
-    raise ValueError("LLM_MODEL_PATH environment variable not set.")
-if not os.path.exists(LLM_MODEL_PATH):
-    raise FileNotFoundError(f"Model file not found at LLM_MODEL_PATH: {LLM_MODEL_PATH}")
+parser = argparse.ArgumentParser(description="Llama.cpp OpenAI-Compatible API with KV Cache")
+parser.add_argument("-m", "--model-path", required=True, help="Path to the LLM model file")
+parser.add_argument("--n-ctx", type=int, default=4096, help="Context size for the model")
+args = parser.parse_args()
 
-LLM_N_CTX = int(os.environ.get("LLM_N_CTX", 4096)) 
+LLM_MODEL_PATH = args.model_path
+if not os.path.exists(LLM_MODEL_PATH):
+    raise FileNotFoundError(f"Model file not found at: {LLM_MODEL_PATH}")
+
+LLM_N_CTX = args.n_ctx
 LLM_N_THREADS = os.cpu_count()
 
 MODEL_NAME = os.path.splitext(os.path.basename(LLM_MODEL_PATH))[0].replace('.', '_')
