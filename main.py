@@ -23,6 +23,10 @@ from llama_cpp import Llama, LlamaGrammar
 parser = argparse.ArgumentParser(description="Llama.cpp OpenAI-Compatible API with KV Cache")
 parser.add_argument("-m", "--model-path", required=True, help="Path to the LLM model file")
 parser.add_argument("--n-ctx", type=int, default=4096, help="Context size for the model")
+parser.add_argument("--top-k", type=int, default=20, help="Top K sampling parameter (default: 20)")
+parser.add_argument("--repeat-penalty", type=float, default=1.0, help="Repeat penalty parameter (default: 1.0)")
+parser.add_argument("--temperature", type=float, default=0.7, help="Temperature parameter (default: 0.7)")
+parser.add_argument("--min-p", type=float, default=0.05, help="Min P sampling parameter (default: 0.05)")
 args = parser.parse_args()
 
 LLM_MODEL_PATH = args.model_path
@@ -31,6 +35,10 @@ if not os.path.exists(LLM_MODEL_PATH):
 
 LLM_N_CTX = args.n_ctx
 LLM_N_THREADS = os.cpu_count()
+LLM_TOP_K = args.top_k
+LLM_REPEAT_PENALTY = args.repeat_penalty
+LLM_TEMPERATURE = args.temperature
+LLM_MIN_P = args.min_p
 
 MODEL_NAME = os.path.splitext(os.path.basename(LLM_MODEL_PATH))[0].replace('.', '_')
 CACHE_BASE_DIR = "./cache"
@@ -290,7 +298,12 @@ async def startup_event():
             model_path=LLM_MODEL_PATH,
             n_ctx=LLM_N_CTX,
             n_threads=LLM_N_THREADS,
-            verbose=True 
+            verbose=True,
+            # LLM sampling parameters
+            top_k=LLM_TOP_K,
+            repeat_penalty=LLM_REPEAT_PENALTY,
+            temperature=LLM_TEMPERATURE,
+            min_p=LLM_MIN_P
         )
     except Exception as e:
         print(f"Failed to initialize Llama model: {e}")
