@@ -10,6 +10,7 @@ import time
 import uuid
 import atexit
 import argparse
+import uvicorn
 from typing import List, Dict, Any, Optional, Generator
 
 from fastapi import FastAPI, HTTPException, Request
@@ -27,6 +28,7 @@ parser.add_argument("--top-k", type=int, default=20, help="Top K sampling parame
 parser.add_argument("--repeat-penalty", type=float, default=1.0, help="Repeat penalty parameter (default: 1.0)")
 parser.add_argument("--temperature", type=float, default=0.7, help="Temperature parameter (default: 0.7)")
 parser.add_argument("--min-p", type=float, default=0.05, help="Min P sampling parameter (default: 0.05)")
+parser.add_argument("--seed", type=int, default=3407, help="Random seed for reproducibility (default: 3407)")
 args = parser.parse_args()
 
 LLM_MODEL_PATH = args.model_path
@@ -39,6 +41,7 @@ LLM_TOP_K = args.top_k
 LLM_REPEAT_PENALTY = args.repeat_penalty
 LLM_TEMPERATURE = args.temperature
 LLM_MIN_P = args.min_p
+LLM_SEED = args.seed
 
 MODEL_NAME = os.path.splitext(os.path.basename(LLM_MODEL_PATH))[0].replace('.', '_')
 CACHE_BASE_DIR = "./cache"
@@ -299,6 +302,9 @@ async def startup_event():
             n_ctx=LLM_N_CTX,
             n_threads=LLM_N_THREADS,
             verbose=True,
+            seed=LLM_SEED,
+            offload_kqv=True,
+            n_gpu_layers=-1,
             # LLM sampling parameters
             top_k=LLM_TOP_K,
             repeat_penalty=LLM_REPEAT_PENALTY,
@@ -475,7 +481,6 @@ async def health_check():
     return {"status": "degraded", "model_loaded": False, "detail": "LLM instance or worker not available."}
 
 if __name__ == "__main__":
-    import uvicorn
     if not LLM_MODEL_PATH:
         print("FATAL: LLM_MODEL_PATH environment variable must be set.")
         print("Example: export LLM_MODEL_PATH=/path/to/your/model.gguf")
