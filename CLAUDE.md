@@ -38,6 +38,7 @@ This means if you send messages A, B, C and then later send A, B, C, D, the serv
 cachehost/
 ├── main.py                      # Entry point - CLI parsing, uvicorn launch
 ├── requirements.txt             # Dependencies (optional MLX)
+├── pytest.ini                   # Pytest configuration
 ├── README.md                    # Brief project description
 ├── CLAUDE.md                    # This file
 ├── TODO.md                      # Task tracking
@@ -74,6 +75,27 @@ cachehost/
 │       ├── openai_routes.py     # /v1/chat/completions
 │       ├── anthropic_routes.py  # /v1/messages
 │       └── common_routes.py     # /health
+│
+├── tests/                       # Test suite
+│   ├── __init__.py
+│   ├── conftest.py              # Shared fixtures, platform markers
+│   ├── fixtures/
+│   │   ├── __init__.py
+│   │   └── mock_backend.py      # MockBackend for testing
+│   ├── unit/
+│   │   ├── __init__.py
+│   │   ├── test_config.py
+│   │   ├── test_cache_manager.py
+│   │   ├── test_schemas_common.py
+│   │   ├── test_schemas_openai.py
+│   │   ├── test_schemas_anthropic.py
+│   │   ├── test_backend_protocol.py
+│   │   └── test_mlx_backend.py  # macOS-only tests
+│   └── integration/
+│       ├── __init__.py
+│       ├── test_health_endpoint.py
+│       ├── test_openai_api.py
+│       └── test_anthropic_api.py
 │
 └── cache/                       # Runtime cache directory (auto-created, auto-cleaned)
     └── {model_name}/{backend_name}/
@@ -201,7 +223,47 @@ Uses Python's `pickle` module with backend-specific `save_state()`/`load_state()
 
 ## Testing
 
-Example request using curl (OpenAI format):
+### Running Tests
+
+```bash
+# Run all tests
+pytest tests/
+
+# Run with verbose output
+pytest tests/ -v
+
+# Run only unit tests
+pytest tests/unit/
+
+# Run only integration tests
+pytest tests/integration/
+
+# Skip macOS-only tests (for CI on Linux)
+pytest tests/ -m "not macos_only"
+
+# Run specific test file
+pytest tests/unit/test_cache_manager.py -v
+```
+
+### Test Suite Overview
+
+The test suite uses mocked backends to avoid requiring real LLM models:
+
+- **Unit tests** (~170 tests): Test individual components in isolation
+  - `test_cache_manager.py`: Cache key generation, state persistence, prefix matching
+  - `test_config.py`: Configuration defaults, CLI argument parsing
+  - `test_schemas_*.py`: Pydantic model validation for OpenAI/Anthropic formats
+  - `test_backend_protocol.py`: GenerationParams, GenerationResult, GenerationChunk
+  - `test_mlx_backend.py`: MLX backend (macOS-only, skipped on other platforms)
+
+- **Integration tests** (~30 tests): Test API endpoints with mock workers
+  - `test_health_endpoint.py`: Health check responses
+  - `test_openai_api.py`: OpenAI chat completions (streaming/non-streaming)
+  - `test_anthropic_api.py`: Anthropic messages API (streaming/non-streaming)
+
+### Manual Testing with curl
+
+Example request (OpenAI format):
 ```bash
 curl -X POST http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
@@ -245,6 +307,11 @@ Core:
 - `uvicorn` - ASGI server
 - `pydantic` - Data validation
 - `llama-cpp-python` - LLM inference engine (default backend)
+
+Testing:
+- `pytest` - Test framework
+- `pytest-asyncio` - Async test support
+- `httpx` - Required for FastAPI TestClient
 
 Optional (Mac only):
 - `mlx` - Apple's ML framework

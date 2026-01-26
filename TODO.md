@@ -11,12 +11,29 @@
 - [x] Add configurable timeout (--timeout flag)
 - [x] Update CLAUDE.md documentation
 
-## Testing
+## Completed (Test Suite)
 
-- [ ] Add unit tests for cache key generation (CacheManager._compute_cache_key)
-- [ ] Add unit tests for Pydantic models (request/response validation)
-- [ ] Add integration tests for the API endpoints
-- [ ] Set up pytest and test configuration
+- [x] Set up pytest and test configuration (pytest.ini, conftest.py)
+- [x] Create MockBackend for testing without real models
+- [x] Add unit tests for CacheManager (20 tests)
+  - Cache key generation (_compute_cache_key)
+  - State save/load with pickle serialization
+  - Longest prefix matching
+  - Cache cleanup
+- [x] Add unit tests for Config and CLI parsing (22 tests)
+- [x] Add unit tests for Pydantic schemas (91 tests total)
+  - Common schemas (ChatMessage, normalize_message)
+  - OpenAI schemas (request/response validation)
+  - Anthropic schemas (message types, streaming events)
+- [x] Add unit tests for backend protocol dataclasses (18 tests)
+- [x] Add unit tests for MLX backend (18 tests, macOS-only)
+- [x] Add integration tests for API endpoints (27 tests)
+  - Health endpoint
+  - OpenAI chat completions (streaming and non-streaming)
+  - Anthropic messages (streaming and non-streaming)
+
+## Testing - Remaining
+
 - [ ] Test MLX backend on Mac hardware (state save/load limitations)
 - [ ] End-to-end testing with real model
 
