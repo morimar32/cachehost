@@ -208,4 +208,5 @@ __marimo__/
 
 #models
 *.gguf
+*.mlx
 cache/
