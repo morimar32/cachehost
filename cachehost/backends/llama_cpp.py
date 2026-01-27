@@ -60,7 +60,21 @@ class LlamaCppBackend:
             min_p=self.config.min_p,
         )
 
+        self._log_device_info()
         logger.debug("Model loaded successfully")
+
+    def _log_device_info(self) -> None:
+        """Log whether the model is using CUDA/GPU or CPU."""
+        try:
+            import llama_cpp
+
+            supports_gpu = getattr(llama_cpp, "llama_supports_gpu_offload", None)
+            if supports_gpu and supports_gpu():
+                logger.info("llama.cpp backend using GPU acceleration (CUDA/Metal)")
+            else:
+                logger.info("llama.cpp backend using CPU")
+        except Exception:
+            logger.info("llama.cpp backend device: unknown")
 
     def reset(self) -> None:
         """Reset the model state."""
