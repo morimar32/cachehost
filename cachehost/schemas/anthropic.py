@@ -51,6 +51,9 @@ class AnthropicMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: Union[str, List[ContentBlock]]
 
+    class Config:
+        extra = "ignore"  # Ignore extra fields from client
+
 
 class ToolDefinition(BaseModel):
     """Definition of a tool available to the model."""
@@ -61,9 +64,9 @@ class ToolDefinition(BaseModel):
 
 class AnthropicRequest(BaseModel):
     """Anthropic messages API request."""
-    model: str
+    model: Optional[str] = "local"  # Make optional with default
     messages: List[AnthropicMessage]
-    max_tokens: int
+    max_tokens: Optional[int] = 4096  # Make optional with default
     system: Optional[str] = None
     temperature: Optional[float] = None
     top_p: Optional[float] = None
@@ -73,6 +76,9 @@ class AnthropicRequest(BaseModel):
     tools: Optional[List[ToolDefinition]] = None
     tool_choice: Optional[Dict[str, Any]] = None  # {"type": "auto"}, {"type": "any"}, {"type": "tool", "name": "..."}
     metadata: Optional[Dict[str, Any]] = None
+
+    class Config:
+        extra = "ignore"  # Ignore extra fields from client
 
 
 class AnthropicUsage(BaseModel):

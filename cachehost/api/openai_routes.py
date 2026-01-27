@@ -130,7 +130,7 @@ def create_openai_router(app_state: dict) -> APIRouter:
     async def create_chat_completion(request: ChatCompletionRequest):
         """OpenAI-compatible chat completion endpoint."""
         req_id = f"req-{uuid.uuid4().hex[:8]}"
-        logger.info(f"[{req_id}] Received request. Stream: {request.stream}")
+        logger.debug(f"[{req_id}] Received request. Stream: {request.stream}")
 
         worker = app_state.get("worker")
         config = app_state.get("config")

@@ -25,9 +25,8 @@ class TestCacheManagerInit:
         assert manager.cache_dir == temp_dir
         assert manager.model_name == "test_model"
         assert manager.backend_name == "test_backend"
-        assert manager.model_cache_dir == os.path.join(
-            temp_dir, "test_model", "test_backend"
-        )
+        # Cache path only includes model name, not backend
+        assert manager.model_cache_dir == os.path.join(temp_dir, "test_model")
 
     def test_init_creates_cache_path(self, temp_dir):
         """Test that init() creates the cache directory structure."""
@@ -39,7 +38,8 @@ class TestCacheManagerInit:
         )
         manager.init()
 
-        expected_path = os.path.join(cache_dir, "my_model", "llama_cpp")
+        # Cache path only includes model name, not backend
+        expected_path = os.path.join(cache_dir, "my_model")
         assert os.path.exists(expected_path)
 
     def test_init_clears_existing_cache(self, temp_dir):

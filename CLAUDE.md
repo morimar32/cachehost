@@ -98,7 +98,7 @@ cachehost/
 │       └── test_anthropic_api.py
 │
 └── cache/                       # Runtime cache directory (auto-created, auto-cleaned)
-    └── {model_name}/{backend_name}/
+    └── {model_name}/
         └── {hash}.pkl           # Pickled LLM states
 ```
 
@@ -163,7 +163,7 @@ Available backends:
 | `--timeout` | No | 300 | Request timeout in seconds |
 | `--backend` | No | auto | Backend: auto, llama_cpp, mlx |
 | `--api-format` | No | openai | API format: openai, anthropic |
-| `--log-level` | No | INFO | Log level |
+| `--log-level` | No | INFO | Log level (INFO shows cache hits/misses only, DEBUG for verbose) |
 | `--log-file` | No | None | Optional log file path |
 | `--cache-dir` | No | ./cache | Cache directory |
 
@@ -198,14 +198,28 @@ Returns server status and model info.
 - Dataclasses for configuration
 - Logging via Python's logging module
 
+## Logging Levels
+
+At **INFO** level (default), only cache hit/miss status is shown per request:
+- Green text: KV cache loaded (cache hit)
+- Red text: No cache found (cache miss)
+
+At **DEBUG** level, verbose output includes:
+- Worker thread lifecycle events
+- Request processing details
+- Backend loading/shutdown
+- Cache directory operations
+- State save/load operations
+
 ## Key Implementation Details
 
 ### Cache Key Generation
 ```python
-combined_content = MODEL_NAME + "".join(f"{msg.role}:{msg.content}" for msg in history_prefix)
+# Content is normalized (stripped) to handle whitespace differences
+combined_content = MODEL_NAME + "".join(f"{msg.role}:{msg.content.strip()}" for msg in history_prefix)
 hash = SHA256(combined_content)
 ```
-Note: Both role and content are included in the hash to properly distinguish different conversation structures.
+Note: Both role and content are included in the hash to properly distinguish different conversation structures. Content is normalized (whitespace stripped) to handle differences between LLM-generated content and what clients send back.
 
 ### State Serialization
 Uses Python's `pickle` module with backend-specific `save_state()`/`load_state()` methods.
@@ -214,7 +228,7 @@ Uses Python's `pickle` module with backend-specific `save_state()`/`load_state()
 - Cleared on startup
 - Cleared on shutdown (registered with `atexit`)
 - States persist only during a single server session
-- Cache path: `{cache_dir}/{model_name}/{backend_name}/{hash}.pkl`
+- Cache path: `{cache_dir}/{model_name}/{hash}.pkl`
 
 ### Error Handling
 - Cache load failures fall back to fresh state (graceful degradation)

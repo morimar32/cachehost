@@ -43,14 +43,14 @@ class LlamaCppBackend:
 
     def load(self) -> None:
         """Load the model."""
-        logger.info(f"Loading model from: {self.config.model_path}")
-        logger.info(f"Context size: {self.config.n_ctx}")
+        logger.debug(f"Loading model from: {self.config.model_path}")
+        logger.debug(f"Context size: {self.config.n_ctx}")
 
         self._llm = Llama(
             model_path=self.config.model_path,
             n_ctx=self.config.n_ctx,
             n_threads=self.config.n_threads,
-            verbose=True,
+            verbose=False,
             seed=self.config.seed,
             offload_kqv=True,
             n_gpu_layers=-1,
@@ -60,7 +60,7 @@ class LlamaCppBackend:
             min_p=self.config.min_p,
         )
 
-        logger.info("Model loaded successfully")
+        logger.debug("Model loaded successfully")
 
     def reset(self) -> None:
         """Reset the model state."""
@@ -184,5 +184,5 @@ class LlamaCppBackend:
 
     def shutdown(self) -> None:
         """Clean up resources."""
-        logger.info("Shutting down llama-cpp backend")
+        logger.debug("Shutting down llama-cpp backend")
         self._llm = None

@@ -51,12 +51,12 @@ class MLXBackend:
                 "mlx-lm is not installed. Install with: pip install mlx-lm"
             )
 
-        logger.info(f"Loading MLX model from: {self.config.model_path}")
+        logger.debug(f"Loading MLX model from: {self.config.model_path}")
 
         # MLX expects a directory path with the model files
         self._model, self._tokenizer = load(self.config.model_path)
 
-        logger.info("MLX model loaded successfully")
+        logger.debug("MLX model loaded successfully")
 
     def reset(self) -> None:
         """Reset the model state."""
@@ -184,6 +184,6 @@ class MLXBackend:
 
     def shutdown(self) -> None:
         """Clean up resources."""
-        logger.info("Shutting down MLX backend")
+        logger.debug("Shutting down MLX backend")
         self._model = None
         self._tokenizer = None

@@ -43,10 +43,10 @@ def create_app(config: Config) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         """Manage application lifecycle."""
-        logger.info("Server startup...")
+        logger.debug("Server startup...")
 
         # Initialize backend
-        logger.info(f"Initializing {config.backend} backend...")
+        logger.debug(f"Initializing {config.backend} backend...")
         backend = get_backend(config)
         backend.load()
         app_state["backend"] = backend
@@ -72,13 +72,13 @@ def create_app(config: Config) -> FastAPI:
         worker.start()
         app_state["worker"] = worker
 
-        logger.info(f"Server startup complete. API format: {config.api_format}")
-        logger.info(f"Model: {backend.model_name}, Backend: {backend.backend_name}")
+        logger.debug(f"Server startup complete. API format: {config.api_format}")
+        logger.debug(f"Model: {backend.model_name}, Backend: {backend.backend_name}")
 
         yield
 
         # Shutdown
-        logger.info("Server shutdown initiated...")
+        logger.debug("Server shutdown initiated...")
 
         if worker:
             worker.stop()
@@ -87,7 +87,7 @@ def create_app(config: Config) -> FastAPI:
             backend.shutdown()
 
         # Cache cleanup is handled by atexit in CacheManager
-        logger.info("Server shutdown complete.")
+        logger.debug("Server shutdown complete.")
 
     # Create FastAPI app with lifespan
     app = FastAPI(
@@ -103,9 +103,9 @@ def create_app(config: Config) -> FastAPI:
     # Include API-format specific routes
     if config.api_format == "openai":
         app.include_router(create_openai_router(app_state))
-        logger.info("Registered OpenAI-compatible routes")
+        logger.debug("Registered OpenAI-compatible routes")
     elif config.api_format == "anthropic":
         app.include_router(create_anthropic_router(app_state))
-        logger.info("Registered Anthropic-compatible routes")
+        logger.debug("Registered Anthropic-compatible routes")
 
     return app

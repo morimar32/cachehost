@@ -167,7 +167,25 @@ def create_anthropic_router(app_state: dict) -> APIRouter:
         finally:
             logger.debug(f"[{req_id}] Anthropic stream generator finished")
 
+    @router.get("/v1/models")
+    @router.get("/models")
+    async def list_models():
+        """List available models (Anthropic-compatible)."""
+        model_name = get_model_name()
+        return {
+            "data": [
+                {
+                    "id": model_name,
+                    "object": "model",
+                    "created": int(time.time()),
+                    "owned_by": "local",
+                }
+            ],
+            "object": "list",
+        }
+
     @router.post("/v1/messages", response_model=None)
+    @router.post("/messages", response_model=None)
     async def create_message(
         request: AnthropicRequest,
         x_api_key: str | None = Header(None, alias="x-api-key"),
@@ -175,7 +193,7 @@ def create_anthropic_router(app_state: dict) -> APIRouter:
     ):
         """Anthropic messages API endpoint."""
         req_id = f"req-{uuid.uuid4().hex[:8]}"
-        logger.info(f"[{req_id}] Received Anthropic request. Stream: {request.stream}")
+        logger.debug(f"[{req_id}] Received Anthropic request. Stream: {request.stream}")
 
         worker = app_state.get("worker")
         config = app_state.get("config")

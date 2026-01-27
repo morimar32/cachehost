@@ -1,6 +1,7 @@
 """Worker thread for processing LLM requests."""
 
 import queue
+import sys
 import threading
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
@@ -11,6 +12,16 @@ from ..logging_config import get_logger
 from ..schemas.common import ChatMessage
 
 logger = get_logger("worker")
+
+# ANSI color codes for terminal output
+_GREEN = "\033[92m"
+_RED = "\033[91m"
+_RESET = "\033[0m"
+
+
+def _supports_color() -> bool:
+    """Check if the terminal supports color output."""
+    return hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
 
 
 @dataclass
@@ -65,7 +76,7 @@ class LLMWorker:
         self._running = True
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
-        logger.info("Worker thread started")
+        logger.debug("Worker thread started")
 
     def stop(self, timeout: float = 10.0) -> None:
         """
@@ -79,12 +90,12 @@ class LLMWorker:
         self.request_queue.put(None)
 
         if self._thread:
-            logger.info("Waiting for worker thread to join...")
+            logger.debug("Waiting for worker thread to join...")
             self._thread.join(timeout=timeout)
             if self._thread.is_alive():
                 logger.warning("Worker thread did not join in time")
             else:
-                logger.info("Worker thread stopped")
+                logger.debug("Worker thread stopped")
 
     def is_alive(self) -> bool:
         """Check if worker thread is running."""
@@ -92,7 +103,7 @@ class LLMWorker:
 
     def _run(self) -> None:
         """Main worker loop."""
-        logger.info("Worker thread running")
+        logger.debug("Worker thread running")
 
         while self._running:
             try:
@@ -100,7 +111,7 @@ class LLMWorker:
 
                 # Check for shutdown signal
                 if request_package is None:
-                    logger.info("Worker received shutdown signal")
+                    logger.debug("Worker received shutdown signal")
                     break
 
                 self._process_request(request_package)
@@ -108,12 +119,12 @@ class LLMWorker:
             except Exception as e:
                 logger.error(f"Unexpected error in worker loop: {e}")
 
-        logger.info("Worker thread exiting")
+        logger.debug("Worker thread exiting")
 
     def _process_request(self, pkg: RequestPackage) -> None:
         """Process a single request."""
         req_id = pkg.id
-        logger.info(f"[{req_id}] Processing request. History length: {len(pkg.messages)}")
+        logger.debug(f"[{req_id}] Processing request. History length: {len(pkg.messages)}")
 
         try:
             # 1. Cache lookup - find longest matching prefix
@@ -124,13 +135,21 @@ class LLMWorker:
             if cached_state is not None:
                 try:
                     self.backend.load_state(cached_state)
-                    logger.info(f"[{req_id}] Loaded cached state for prefix length {prefix_length}")
+                    # Green text for cache hit
+                    if _supports_color():
+                        logger.info(f"{_GREEN}[{req_id}] KV cache loaded (prefix length {prefix_length}){_RESET}")
+                    else:
+                        logger.info(f"[{req_id}] KV cache loaded (prefix length {prefix_length})")
                 except Exception as e:
                     logger.warning(f"[{req_id}] Failed to load cached state: {e}. Starting fresh.")
                     self.backend.reset()
             else:
                 self.backend.reset()
-                logger.info(f"[{req_id}] No cache found, starting fresh")
+                # Red text for cache miss
+                if _supports_color():
+                    logger.info(f"{_RED}[{req_id}] No cache found, starting fresh{_RESET}")
+                else:
+                    logger.info(f"[{req_id}] No cache found, starting fresh")
 
             # 2. Generate response
             assistant_content = ""
@@ -148,7 +167,7 @@ class LLMWorker:
                 try:
                     state_to_save = self.backend.save_state()
                     self.cache_manager.save_state(history_after_generation, state_to_save)
-                    logger.info(f"[{req_id}] Saved state after generation")
+                    logger.debug(f"[{req_id}] Saved state after generation")
                 except Exception as e:
                     logger.warning(f"[{req_id}] Failed to save state: {e}")
             else:
@@ -166,7 +185,7 @@ class LLMWorker:
             if pkg.signal_event:
                 pkg.signal_event.set()
             self.request_queue.task_done()
-            logger.info(f"[{req_id}] Request processing complete")
+            logger.debug(f"[{req_id}] Request processing complete")
 
     def _generate_streaming(self, pkg: RequestPackage) -> str:
         """Generate streaming response and return full content."""

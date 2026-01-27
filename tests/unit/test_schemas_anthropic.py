@@ -185,21 +185,23 @@ class TestAnthropicRequest:
     """Tests for AnthropicRequest model."""
 
     def test_required_fields(self):
-        """Test required fields."""
+        """Test that messages is required but model/max_tokens have defaults."""
         with pytest.raises(ValidationError):
-            AnthropicRequest(model="claude-3", messages=[])  # missing max_tokens
+            AnthropicRequest()  # missing messages
+
+        # model and max_tokens should have defaults
+        messages = [AnthropicMessage(role="user", content="Hello")]
+        request = AnthropicRequest(messages=messages)
+        assert request.model == "local"
+        assert request.max_tokens == 4096
 
     def test_minimal_request(self):
-        """Test minimal valid request."""
+        """Test minimal valid request with just messages."""
         messages = [AnthropicMessage(role="user", content="Hello")]
-        request = AnthropicRequest(
-            model="claude-3-sonnet",
-            messages=messages,
-            max_tokens=100,
-        )
+        request = AnthropicRequest(messages=messages)
 
-        assert request.model == "claude-3-sonnet"
-        assert request.max_tokens == 100
+        assert request.model == "local"
+        assert request.max_tokens == 4096
         assert len(request.messages) == 1
 
     def test_default_values(self):

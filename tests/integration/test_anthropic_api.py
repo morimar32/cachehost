@@ -118,6 +118,39 @@ def anthropic_app(mock_backend, mock_worker):
     worker_thread.join(timeout=2)
 
 
+class TestAnthropicModels:
+    """Tests for GET /models and /v1/models endpoints."""
+
+    def test_list_models_v1_endpoint(self, anthropic_app):
+        """Test GET /v1/models returns model list."""
+        app, _ = anthropic_app
+        client = TestClient(app)
+
+        response = client.get("/v1/models")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "data" in data
+        assert "object" in data
+        assert data["object"] == "list"
+        assert len(data["data"]) > 0
+        assert "id" in data["data"][0]
+        assert "object" in data["data"][0]
+        assert data["data"][0]["object"] == "model"
+
+    def test_list_models_no_prefix_endpoint(self, anthropic_app):
+        """Test GET /models returns model list (no /v1 prefix)."""
+        app, _ = anthropic_app
+        client = TestClient(app)
+
+        response = client.get("/models")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "data" in data
+        assert data["object"] == "list"
+
+
 class TestAnthropicMessages:
     """Tests for POST /v1/messages endpoint."""
 
@@ -145,6 +178,25 @@ class TestAnthropicMessages:
         assert len(data["content"]) > 0
         assert data["content"][0]["type"] == "text"
         assert "usage" in data
+
+    def test_non_streaming_no_prefix(self, anthropic_app):
+        """Test successful message at /messages (no /v1 prefix)."""
+        app, _ = anthropic_app
+        client = TestClient(app)
+
+        response = client.post(
+            "/messages",
+            json={
+                "model": "claude-3-sonnet",
+                "messages": [{"role": "user", "content": "Hello!"}],
+                "max_tokens": 100,
+            },
+            headers={"anthropic-version": "2023-06-01"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["type"] == "message"
 
     def test_streaming_success(self, anthropic_app):
         """Test successful streaming message."""
@@ -180,8 +232,8 @@ class TestAnthropicMessages:
         assert "content_block_start" in event_types
         assert "message_stop" in event_types
 
-    def test_missing_max_tokens_returns_422(self, anthropic_app):
-        """Test that missing max_tokens returns 422."""
+    def test_missing_max_tokens_uses_default(self, anthropic_app):
+        """Test that missing max_tokens uses default value."""
         app, _ = anthropic_app
         client = TestClient(app)
 
@@ -190,15 +242,15 @@ class TestAnthropicMessages:
             json={
                 "model": "claude-3-sonnet",
                 "messages": [{"role": "user", "content": "Hello!"}],
-                # max_tokens is required in Anthropic API
+                # max_tokens defaults to 4096
             },
             headers={"anthropic-version": "2023-06-01"},
         )
 
-        assert response.status_code == 422
+        assert response.status_code == 200
 
-    def test_missing_model_returns_422(self, anthropic_app):
-        """Test that missing model returns 422."""
+    def test_missing_model_uses_default(self, anthropic_app):
+        """Test that missing model uses default value."""
         app, _ = anthropic_app
         client = TestClient(app)
 
@@ -206,12 +258,12 @@ class TestAnthropicMessages:
             "/v1/messages",
             json={
                 "messages": [{"role": "user", "content": "Hello!"}],
-                "max_tokens": 100,
+                # model defaults to "local"
             },
             headers={"anthropic-version": "2023-06-01"},
         )
 
-        assert response.status_code == 422
+        assert response.status_code == 200
 
     def test_worker_not_running_returns_503(self, mock_backend):
         """Test that unavailable worker returns 503."""
