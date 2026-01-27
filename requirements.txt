@@ -6,9 +6,8 @@ pydantic
 llama-cpp-python
 
 # Optional: MLX backend for Apple Silicon Macs
-# Uncomment the following lines to enable MLX support:
-# mlx>=0.5.0; sys_platform == "darwin"
-# mlx-lm>=0.5.0; sys_platform == "darwin"
+mlx>=0.5.0; sys_platform == "darwin"
+mlx-lm>=0.5.0; sys_platform == "darwin"
 
 # Testing
 pytest>=7.0.0

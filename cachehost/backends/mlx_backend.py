@@ -1,6 +1,6 @@
 """MLX backend implementation for macOS."""
 
-from typing import Any, Iterator, List, Optional
+from typing import Any, Dict, Iterator, List, Optional
 
 from ..config import Config
 from ..logging_config import get_logger
@@ -9,14 +9,15 @@ from .protocol import GenerationChunk, GenerationParams, GenerationResult
 
 logger = get_logger("backend.mlx")
 
+# Marker key for MLX prompt cache states (matches cache/manager.py)
+MLX_CACHE_MARKER = "_mlx_prompt_cache"
+
 
 class MLXBackend:
     """
     LLM backend using MLX for Apple Silicon Macs.
 
-    Note: MLX state management is currently limited. This implementation
-    provides the basic generation interface but may not support full
-    KV-cache state save/restore like llama-cpp-python.
+    Supports full KV-cache state management via mlx_lm's prompt caching API.
     """
 
     def __init__(self, config: Config):
@@ -30,7 +31,7 @@ class MLXBackend:
         self._model = None
         self._tokenizer = None
         self._model_name = config.model_name
-        self._state: Optional[Any] = None
+        self._prompt_cache = None
 
     @property
     def model_name(self) -> str:
@@ -46,6 +47,7 @@ class MLXBackend:
         """Load the model using MLX."""
         try:
             from mlx_lm import load
+            from mlx_lm.models.cache import make_prompt_cache
         except ImportError:
             raise RuntimeError(
                 "mlx-lm is not installed. Install with: pip install mlx-lm"
@@ -56,36 +58,64 @@ class MLXBackend:
         # MLX expects a directory path with the model files
         self._model, self._tokenizer = load(self.config.model_path)
 
-        logger.debug("MLX model loaded successfully")
+        # Initialize prompt cache for KV-cache management
+        self._prompt_cache = make_prompt_cache(self._model)
+
+        logger.debug("MLX model loaded successfully with prompt cache initialized")
 
     def reset(self) -> None:
-        """Reset the model state."""
-        # MLX doesn't have explicit state reset like llama-cpp
-        # The KV cache is typically managed per-generation
-        self._state = None
-        logger.debug("MLX state reset (no-op for stateless generation)")
+        """Reset the model state by creating a fresh prompt cache."""
+        if self._model is None:
+            self._prompt_cache = None
+            return
+
+        try:
+            from mlx_lm.models.cache import make_prompt_cache
+
+            self._prompt_cache = make_prompt_cache(self._model)
+            logger.debug("MLX prompt cache reset")
+        except ImportError:
+            logger.warning("mlx-lm not available for cache reset")
+            self._prompt_cache = None
 
     def save_state(self) -> Any:
         """
         Save and return the current KV-cache state.
 
-        Note: MLX state management is limited. This returns a placeholder
-        that may not fully capture the KV cache state.
+        Returns a dict with MLX marker and prompt cache.
+        The CacheManager will handle saving to safetensors format.
         """
-        # TODO: Research MLX state management capabilities
-        # For now, return None as MLX doesn't expose KV cache state
-        logger.warning("MLX backend: save_state is not fully implemented")
-        return self._state
+        if self._prompt_cache is None:
+            logger.warning("No prompt cache to save")
+            return None
+
+        return {
+            MLX_CACHE_MARKER: True,
+            "cache": self._prompt_cache,
+        }
 
     def load_state(self, state: Any) -> None:
         """
         Load a previously saved KV-cache state.
 
-        Note: MLX state management is limited.
+        Args:
+            state: Dict containing MLX marker and cache
         """
-        # TODO: Implement proper state loading when MLX supports it
-        logger.warning("MLX backend: load_state is not fully implemented")
-        self._state = state
+        if state is None:
+            self._prompt_cache = None
+            return
+
+        if not isinstance(state, dict) or not state.get(MLX_CACHE_MARKER):
+            logger.warning("Invalid MLX state format")
+            return
+
+        # Extract prompt cache from loaded state
+        loaded_cache = state.get("cache")
+        if loaded_cache is not None:
+            self._prompt_cache = loaded_cache
+            logger.debug("Loaded MLX prompt cache from state")
+        else:
+            logger.warning("No cache found in loaded state")
 
     def _format_messages(self, messages: List[ChatMessage]) -> str:
         """Format chat messages into a prompt string."""
@@ -108,6 +138,66 @@ class MLXBackend:
         parts.append("Assistant:")
         return "\n\n".join(parts)
 
+    def _build_generation_kwargs(self, params: GenerationParams) -> Dict[str, Any]:
+        """
+        Build generation kwargs from GenerationParams.
+
+        MLX-lm's generate_step() accepts a `sampler` callable and
+        `logits_processors` list rather than raw sampling parameter values.
+        This method constructs those using mlx_lm.sample_utils.
+
+        Args:
+            params: Generation parameters
+
+        Returns:
+            Dict of kwargs for mlx_lm.generate/stream_generate
+        """
+        from mlx_lm.sample_utils import make_sampler, make_logits_processors
+
+        # Build sampler from params
+        sampler_kwargs = {
+            "temp": params.temperature,
+            "top_p": params.top_p,
+        }
+        if params.top_k > 0:
+            sampler_kwargs["top_k"] = params.top_k
+        if params.min_p > 0:
+            sampler_kwargs["min_p"] = params.min_p
+
+        kwargs: Dict[str, Any] = {
+            "sampler": make_sampler(**sampler_kwargs),
+        }
+
+        # Build logits processors for repetition penalty
+        if params.repeat_penalty != 1.0:
+            kwargs["logits_processors"] = make_logits_processors(
+                repetition_penalty=params.repeat_penalty,
+            )
+
+        if params.max_tokens:
+            kwargs["max_tokens"] = params.max_tokens
+
+        return kwargs
+
+    def _count_tokens(self, text: str) -> int:
+        """
+        Count tokens in a text string.
+
+        Args:
+            text: The text to tokenize
+
+        Returns:
+            Number of tokens
+        """
+        if self._tokenizer is None:
+            return 0
+
+        try:
+            tokens = self._tokenizer.encode(text)
+            return len(tokens)
+        except Exception:
+            return 0
+
     def generate(
         self, messages: List[ChatMessage], params: GenerationParams
     ) -> GenerationResult:
@@ -121,14 +211,11 @@ class MLXBackend:
             raise RuntimeError("mlx-lm is not installed")
 
         prompt = self._format_messages(messages)
+        gen_kwargs = self._build_generation_kwargs(params)
 
-        # MLX generate options
-        gen_kwargs = {
-            "temp": params.temperature,
-            "top_p": params.top_p,
-        }
-        if params.max_tokens:
-            gen_kwargs["max_tokens"] = params.max_tokens
+        # Add prompt cache if available
+        if self._prompt_cache is not None:
+            gen_kwargs["prompt_cache"] = self._prompt_cache
 
         response = generate(
             self._model,
@@ -137,13 +224,17 @@ class MLXBackend:
             **gen_kwargs,
         )
 
-        # MLX doesn't provide detailed token counts
+        # Count tokens
+        prompt_tokens = self._count_tokens(prompt)
+        completion_tokens = self._count_tokens(response)
+        total_tokens = prompt_tokens + completion_tokens
+
         return GenerationResult(
             content=response,
             finish_reason="stop",
-            prompt_tokens=0,
-            completion_tokens=0,
-            total_tokens=0,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
             raw_response={"text": response},
         )
 
@@ -160,30 +251,53 @@ class MLXBackend:
             raise RuntimeError("mlx-lm is not installed")
 
         prompt = self._format_messages(messages)
+        gen_kwargs = self._build_generation_kwargs(params)
 
-        gen_kwargs = {
-            "temp": params.temperature,
-            "top_p": params.top_p,
-        }
-        if params.max_tokens:
-            gen_kwargs["max_tokens"] = params.max_tokens
+        # Add prompt cache if available
+        if self._prompt_cache is not None:
+            gen_kwargs["prompt_cache"] = self._prompt_cache
+
+        # Count prompt tokens upfront
+        prompt_tokens = self._count_tokens(prompt)
 
         # First chunk with role
-        yield GenerationChunk(content="", role="assistant")
+        yield GenerationChunk(content="", role="assistant", prompt_tokens=prompt_tokens)
 
-        for token_text in stream_generate(
+        completion_tokens = 0
+        accumulated_text = ""
+
+        for response in stream_generate(
             self._model,
             self._tokenizer,
             prompt=prompt,
             **gen_kwargs,
         ):
+            # stream_generate can yield strings or GenerationResponse objects
+            if isinstance(response, str):
+                token_text = response
+            else:
+                # GenerationResponse object has text attribute
+                token_text = getattr(response, "text", str(response))
+
+            accumulated_text += token_text
+            completion_tokens += 1  # Approximate: 1 token per yield
+
             yield GenerationChunk(content=token_text)
 
-        # Final chunk
-        yield GenerationChunk(content="", finish_reason="stop", is_final=True)
+        # Final chunk with token counts
+        total_tokens = prompt_tokens + completion_tokens
+        yield GenerationChunk(
+            content="",
+            finish_reason="stop",
+            is_final=True,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+        )
 
     def shutdown(self) -> None:
         """Clean up resources."""
         logger.debug("Shutting down MLX backend")
         self._model = None
         self._tokenizer = None
+        self._prompt_cache = None

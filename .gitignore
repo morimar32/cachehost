@@ -210,6 +210,10 @@ __marimo__/
 *.gguf
 *.mlx
 cache/
+model_test/
 
 #python virtual environment
 cc/
+
+#macs be macin
+.DS_Store

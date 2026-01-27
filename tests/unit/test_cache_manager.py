@@ -399,3 +399,68 @@ class TestCacheCleanup:
 
         # Should not raise
         manager.cleanup()
+
+
+class TestMLXCacheIntegration:
+    """Tests for MLX-specific cache handling."""
+
+    @pytest.fixture
+    def manager(self, temp_dir):
+        """Create a CacheManager for testing."""
+        mgr = CacheManager(
+            cache_dir=temp_dir,
+            model_name="mlx_model",
+            backend_name="mlx",
+        )
+        mgr.init()
+        return mgr
+
+    def test_mlx_marker_detection(self, manager):
+        """Test that MLX marker is detected in state."""
+        from cachehost.cache.manager import MLX_CACHE_MARKER
+
+        # Non-MLX state should save/load normally
+        messages = [ChatMessage(role="user", content="test")]
+        regular_state = {"data": "value"}
+
+        manager.save_state(messages, regular_state)
+        loaded = manager.load_state(messages)
+
+        assert loaded == regular_state
+        assert MLX_CACHE_MARKER not in loaded
+
+    def test_safetensors_filepath_generation(self, manager):
+        """Test that safetensors filepath is generated correctly."""
+        messages = [ChatMessage(role="user", content="test")]
+        safetensors_path = manager._get_safetensors_filepath(messages)
+
+        assert safetensors_path.endswith(".safetensors")
+        assert manager.model_cache_dir in safetensors_path
+
+        # Hash should match pkl file
+        pkl_path = manager.get_cache_filepath(messages)
+        pkl_hash = os.path.basename(pkl_path).replace(".pkl", "")
+        safetensors_hash = os.path.basename(safetensors_path).replace(".safetensors", "")
+        assert pkl_hash == safetensors_hash
+
+    def test_mlx_state_without_mlx_installed(self, manager, caplog):
+        """Test MLX save/load gracefully handles missing mlx_lm."""
+        import logging
+        from unittest.mock import patch
+
+        # Create a state with MLX marker
+        mlx_state = {
+            "_mlx_prompt_cache": True,
+            "cache": "mock_cache",
+        }
+
+        # Mock mlx_lm import to fail
+        with patch.dict("sys.modules", {"mlx_lm": None, "mlx_lm.models": None, "mlx_lm.models.cache": None}):
+            with caplog.at_level(logging.WARNING):
+                result = manager.save_state(
+                    [ChatMessage(role="user", content="test")],
+                    mlx_state,
+                )
+
+        # Should return False since mlx_lm is not available
+        assert result is False
