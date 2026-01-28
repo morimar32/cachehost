@@ -1,38 +1,10 @@
 #!/usr/bin/env python3
-"""CacheHost - Local LLM server with intelligent KV-cache state management.
+"""CacheHost - backward-compatible entry point.
 
-This is the entry point for the CacheHost server. It parses command-line
-arguments, creates the FastAPI application, and starts the uvicorn server.
+Delegates to cachehost.__main__.main() so that `python3 main.py` continues to work.
 """
 
-import uvicorn
-
-from cachehost.config import parse_args
-from cachehost.api import create_app
-
-
-def main() -> None:
-    """Main entry point."""
-    # Parse command line arguments
-    config = parse_args()
-
-    # Create FastAPI application
-    app = create_app(config)
-
-    # Run server
-    print(f"Starting CacheHost server...")
-    print(f"  Model: {config.model_name}")
-    print(f"  Backend: {config.backend}")
-    print(f"  API format: {config.api_format}")
-    print(f"  Address: http://{config.host}:{config.port}")
-
-    uvicorn.run(
-        app,
-        host=config.host,
-        port=config.port,
-        log_level=config.log_level.lower(),
-    )
-
+from cachehost.__main__ import main
 
 if __name__ == "__main__":
     main()

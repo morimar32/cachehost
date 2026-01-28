@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cachehost"
+version = "0.1.0"
+description = "Local LLM server with intelligent KV-cache state management"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+]
+
+[project.optional-dependencies]
+# CPU build (default pip index)
+llama-cpu = ["llama-cpp-python"]
+# CUDA: pip install .[llama-cuda] --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124
+llama-cuda = ["llama-cpp-python"]
+# ROCm: pip install .[llama-rocm] --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/rocm
+llama-rocm = ["llama-cpp-python"]
+# Apple Silicon
+mlx = [
+    "mlx>=0.5.0; sys_platform == 'darwin'",
+    "mlx-lm>=0.5.0; sys_platform == 'darwin'",
+]
+# Development / testing
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "httpx>=0.24.0",
+]
+
+[project.scripts]
+cachehost = "cachehost.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["cachehost*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "macos_only: marks tests as macOS-only (skipped on other platforms)",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+asyncio_mode = "auto"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]

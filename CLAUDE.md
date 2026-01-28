@@ -7,14 +7,24 @@ CacheHost is a local LLM server that provides OpenAI and Anthropic-compatible AP
 ## Quick Start
 
 ```bash
-# Install dependencies
-pip3 install -r requirements.txt
+# Install with a backend (pick one)
+pip install .[llama-cpu]          # CPU-only llama-cpp
+pip install .[llama-cuda] --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124
+pip install .[llama-rocm] --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/rocm
+pip install .[mlx]                # Apple Silicon
+
+# Development install
+pip install -e .[llama-cpu,dev]
 
 # Run the server with a model
+cachehost -m /path/to/your/model.gguf
+
+# Or via python module / main.py (backward compatible)
+python -m cachehost -m /path/to/your/model.gguf
 python3 main.py -m /path/to/your/model.gguf
 
 # With custom options
-python3 main.py -m /path/to/model.gguf --n-ctx 8192 --api-format openai --backend llama_cpp
+cachehost -m /path/to/model.gguf --n-ctx 8192 --api-format openai --backend llama_cpp
 ```
 
 The server starts on `http://0.0.0.0:8000`.
@@ -36,9 +46,8 @@ This means if you send messages A, B, C and then later send A, B, C, D, the serv
 
 ```
 cachehost/
-├── main.py                      # Entry point - CLI parsing, uvicorn launch
-├── requirements.txt             # Dependencies (optional MLX)
-├── pytest.ini                   # Pytest configuration
+├── pyproject.toml               # Project metadata, deps, pytest config
+├── main.py                      # Backward-compatible entry point
 ├── README.md                    # Brief project description
 ├── CLAUDE.md                    # This file
 ├── TODO.md                      # Task tracking
@@ -46,6 +55,7 @@ cachehost/
 │
 ├── cachehost/                   # Main package
 │   ├── __init__.py
+│   ├── __main__.py              # Entry point (cachehost CLI, python -m)
 │   ├── config.py                # Configuration dataclass, CLI args
 │   ├── logging_config.py        # Python logging setup
 │   │
@@ -316,17 +326,18 @@ curl -X POST http://localhost:8000/v1/chat/completions \
 
 ## Dependencies
 
-Core:
+All dependencies are managed in `pyproject.toml`.
+
+Core (always installed):
 - `fastapi` - Web framework
 - `uvicorn` - ASGI server
 - `pydantic` - Data validation
-- `llama-cpp-python` - LLM inference engine (default backend)
 
-Testing:
+Optional backends (install via extras):
+- `llama-cpp-python` - llama.cpp backend (`pip install .[llama-cpu]`)
+- `mlx`, `mlx-lm` - MLX backend for Apple Silicon (`pip install .[mlx]`)
+
+Development (`pip install .[dev]`):
 - `pytest` - Test framework
 - `pytest-asyncio` - Async test support
 - `httpx` - Required for FastAPI TestClient
-
-Optional (Mac only):
-- `mlx` - Apple's ML framework
-- `mlx-lm` - MLX language model utilities
